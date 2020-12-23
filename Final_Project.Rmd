@@ -1,0 +1,671 @@
+---
+title: Prediction of the 2019 Canadian Federal Election using Multilevel Regression
+  with Poststratification
+author: "Guanhao Cao 1002907312"
+date: "Dec. 18th, 2020"
+output:
+  pdf_document: default
+  word_document: default
+  html_document:
+    df_print: paged
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE
+                      )
+setwd("/Users/cgh/Documents/Final_Project") 
+
+```
+# Abstract
+The Liberal Party voting rate of 2019 Canadian Federal Election is predicted by using Multilevel Regression Model with Poststratification technique. Two Bayesian Logistic Models are built for the survey data (2019 CES dataset) to predict the poststratification estimate (Liberal voting rate) of census data (2017 GSS dataset) based on its age group. The poststratification estimate of Liberal voting rate are calculated to be 54.5% and 54.6% while the real-life voting rate of Liberal Party is around 49.1%. This result demonstrates that the voting rate of Liberal Party would increase by around 5.5% if everyone voted in the 2019 Canadian Federal Election.
+
+# Keywords
+2019 Canadian Federal Election, Multilevel regression with poststratification, Bayesian Logistic Regression
+
+# Introduction
+The Federal Election of Canada is vitally important to every citizen of Canada as the party that wins the election could not only nominate Prime Minister but also form cabinet to help Prime Minister run the government. Prime Minister of Canada plays an essential role in leading all Ministers of Cabinet, providing guidances for Parliament members and coordinating other government issues including diplomatic affairs based on the constitutional monarchy of Canada. According to the Canadian electoral system, there are 338 seats of House of Commons that are elected by Canadian citizens and the party with highest number of seats is considered as the new governing party. Every Province of Canada is divided into different number of electoral districts according to its overall population. There are candidates from different parties running for the seat in each district. (Canada's political system) Every citizen could support one party by voting for the its candidate in local electoral district and choose next Prime Minister indirectly in this way. It is hardly deniable that almost every aspect (e.g. medical system, social welfare system, constitution and legislation) of a Canadian citizen would be under the influence of Canada government. Therefore, participating in the federal election is not only the responsibility but also the right of a Canadian citizen. 
+
+Statistical analysis is always an important and useful tool to analyse the results of election. According to the Voter Turnout at Federal Elections and Referendums table, the population of Canada has significantly increased from 3230000 in 1867 to 35151728 in 2019.  (R. Pomfret, H.A. Scarrow) The number of eligible electors within the population also rose sharply from 361028 (11.2% of year 1867 population) to 27373058 (77.9% of year 2019 population). (R. Pomfret, H.A. Scarrow) However, it is noticeable that the voter turnout rate fluctuated around 70% and never had any remarkable increase from 1867 to 2019. This  fact catches my interest and attention as I am curious about why around 30% of eligible electors chose not to vote in every election between 1867 and 2019. (R. Pomfret, H.A. Scarrow) I did some researches online and found out that illness, agedness and personal willing to give up voting right are the three main reasons. Therefore, I propose the research question, which is that how result of the 2019 Canadian Federal Election would been different if everyone (‘Everyone’ here refers to everyone the eligible elector list as some people, e.g. individuals that were charged with election fraud, do not have the right to vote) voted.
+
+Multilevel regression with poststratification is a statistical method that inputs sample dataset and creates a multilevel regression model to predict the response variable of target dataset. This method becomes gradually popular in recent decades because it shows a good performance in predicting target population with samples that are not representative. In this project, I would apply the multilevel regression with post stratification on two datasets to predict how the result of 2019 Canadian Federal Election would varied if everyone voted and detailed methodology would be throughly explained in Methodology section. The result of my prediction would be demonstrated in Result section and elaboration of the results would be interpreted in the Discussion section.
+
+
+```{r}
+library(tidyverse)
+
+```
+
+```{r}
+# Loading in the cleaned ces Data
+ces_data <- read_csv("outputs/ces_data.csv")
+
+# Loading in the cleaned gss Data
+# access gss data from u of t library
+gss_data <- read_csv("outputs/gss_data.csv")
+```
+
+```{r}
+# remove NAs
+ces_data_noNA<-na.omit(ces_data)
+gss_data_noNA<-na.omit(gss_data)
+```
+
+```{r}
+# match age in ces data with age in gss data
+attach(ces_data_noNA)
+
+ces_data_final<-ces_data_noNA %>% 
+  mutate(agegroup = case_when(age <=15 ~ '15 or less',
+                         age > 15  & age <= 24 ~ '15 to 24',
+                         age > 24  & age <= 34 ~ '25 to 34',
+                         age > 34  & age <= 44 ~ '35 to 44',
+                         age > 44  & age <= 54 ~ '45 to 54',
+                         age > 54  & age <= 64 ~ '55 to 64',
+                         age > 64  & age <= 74 ~ '65 to 74',
+                         age > 74 ~ '75 years and over'
+                         )) 
+
+detach(ces_data_noNA)
+
+attach(gss_data_noNA)
+
+gss_data_final<-gss_data_noNA %>% 
+  mutate(agegroup = case_when(agegr10 == 1 ~ '15 to 24',
+                         agegr10 == 2 ~ '25 to 34',
+                         agegr10 == 3 ~ '35 to 44',
+                         agegr10 == 4 ~ '45 to 54',
+                         agegr10 == 5 ~ '55 to 64',
+                         agegr10 == 6 ~ '65 to 74',
+                         agegr10 == 7 ~ '75 years and over',
+                         agegr10 == 96 ~ 'unkonw',
+                         agegr10 == 97 ~ 'unkonw',
+                         agegr10 == 98 ~ 'unkonw',
+                         agegr10 == 99 ~ 'unkonw'
+                         )) 
+
+detach(gss_data_noNA)
+```
+
+```{r}
+# match gender in ces data with gender in gss data
+attach(ces_data_final)
+
+ces_data_final<-ces_data_final %>% 
+  mutate(sex = case_when(gender == 1 ~ 'Male',
+                         gender == 2 ~ 'Female',
+                         !gender %in% c(1,2) ~ 'Other')) 
+
+detach(ces_data_final)
+
+attach(gss_data_final)
+
+gss_data_final<-gss_data_final %>% 
+  mutate(sex = case_when(gender == 1 ~ 'Male',
+                         gender == 2 ~ 'Female',
+                         !gender %in% c(1,2) ~ 'Other')) 
+
+detach(gss_data_final)
+```
+
+```{r}
+# match region in ces data with region in gss data
+
+Atlantic_region <- c('Nova Scotia' ,'New Brunswick' ,'Prince Edward Island' ,'Newfoundland and Labrador')
+Quebec <- c('Quebec')
+Ontario <- c('Ontario')
+Prairie_region <- c('Alberta' ,'Saskatchewan' ,'Manitoba')
+British_Columbia <- c('British Columbia')
+GSS_region <- c('Nova Scotia' ,'New Brunswick' ,'Prince Edward Island' ,'Newfoundland and Labrador','Quebec','Ontario','Alberta' ,'Saskatchewan' ,'Manitoba', 'British Columbia')
+
+attach(ces_data_final)
+
+ces_data_final<-ces_data_final %>% 
+  mutate(regionpr = case_when(place_living_province == 1 ~ 'Newfoundland and Labrador',
+                            place_living_province == 2 ~ 'Prince Edward Island',
+                            place_living_province == 3 ~ 'Nova Scotia',
+                            place_living_province == 4 ~ 'New Brunswick',
+                            place_living_province == 5 ~ 'Quebec',
+                            place_living_province == 6 ~ 'Ontario',
+                            place_living_province == 7 ~ 'Manitoba',
+                            place_living_province == 8 ~ 'Saskatchewan',
+                            place_living_province == 9 ~ 'Alberta',
+                            place_living_province == 10 ~ 'British Columbia',
+                            place_living_province == 11 ~ 'Northwest Territories',
+                            place_living_province == 12 ~ 'Yukon',
+                            place_living_province == 13 ~ 'Nunavut',
+                            !place_living_province %in% seq(1:13) ~ 'Other'
+                            )) 
+
+ces_data_final<-ces_data_final %>% 
+  mutate(region = case_when(regionpr %in% Atlantic_region ~ 'Atlantic region',
+                            regionpr %in% Quebec ~ 'Quebec',
+                            regionpr %in% Ontario ~ 'Ontario',
+                            regionpr %in% Prairie_region ~ 'Prairie region',
+                            regionpr %in% British_Columbia ~ 'British Columbia',
+                            !regionpr %in% GSS_region ~ 'Other'
+                            )) 
+
+detach(ces_data_final)
+
+attach(gss_data_final)
+
+gss_data_final<-gss_data_final %>% 
+  mutate(region = case_when(place_living_province == 1 ~ 'Atlantic region',
+                            place_living_province == 2 ~ 'Quebec',
+                            place_living_province == 3 ~ 'Ontario',
+                            place_living_province == 4 ~ 'Prairie region',
+                            place_living_province == 5 ~ 'British Columbia',
+                            !place_living_province %in% seq(1:5) ~ 'Other',
+                            )) 
+
+detach(gss_data_final)
+```
+
+```{r}
+# match education in ces data with education in gss data
+edugr1 <- c('No schooling' ,'Some elementary school' ,'Completed elementary school')
+edugr2 <- c('Some secondary / high school', 'Completed secondary / high school')
+edugr4 <- c('Some technical, community college, CEGEP, College Classi', 'Completed technical, community college, CEGEP, College C' ,'Some university')
+edugr6 <- c('Bachelors degree')
+edugr7 <- c('Masters degree' ,'Professional degree or doctorate')
+edugr <- c('No schooling' ,'Some elementary school' ,'Completed elementary school' ,'Some secondary / high school', 'Completed secondary / high school' ,'Some technical, community college, CEGEP, College Classi', 'Completed technical, community college, CEGEP, College C' ,'Some university' ,'Bachelors degree' ,'Masters degree' ,'Professional degree or doctorate')
+
+attach(ces_data_final)
+
+ces_data_final<-ces_data_final %>% 
+  mutate(education1 = case_when(education == 1 ~ 'No schooling',
+                                education == 2 ~ 'Some elementary school',
+                                education == 3 ~ 'Completed elementary school',
+                                education == 4 ~ 'Some secondary / high school',
+                                education == 5 ~ 'Completed secondary / high school',
+                                education == 6 ~ 'Some technical, community college, CEGEP, College Classi',
+                                education == 7 ~ 'Completed technical, community college, CEGEP, College C',
+                                education == 8 ~ 'Some university',
+                                education == 9 ~ 'Bachelors degree',
+                                education == 10 ~ 'Masters degree',
+                                education == 11 ~ 'Professional degree or doctorate',
+                                !education %in% seq(1:11) ~ 'Other',
+                                )) 
+
+ces_data_final<-ces_data_final %>% 
+  mutate(edu = case_when(education1 %in% edugr1 ~ 'Less than high school',
+                            education1 %in% edugr2 ~ 'High school',
+                            education1 %in% edugr4 ~ 'College',
+                            education1 %in% edugr6 ~ 'Bachelors degree',
+                            education1 %in% edugr7 ~ 'above the bach',
+                            !education1 %in% edugr ~ 'Other'
+                            )) 
+
+detach(ces_data_final)
+
+attach(gss_data_final)
+
+gss_data_final<-gss_data_final %>% 
+  mutate(edu = case_when(education == 1 ~ 'Less than high school',
+                            education == 2 ~ 'High school',
+                            education == 3 ~ 'Trade certificate',
+                            education == 4 ~ 'College',
+                            education == 5 ~ 'below University',
+                            education == 6 ~ 'Bachelors degree',
+                            education == 7 ~ 'above the bach',
+                            !education %in% seq(1:7) ~ 'Other'
+                            )) 
+
+detach(gss_data_final)
+```
+
+```{r}
+# match income_family in ces data with income_family in gss data
+attach(ces_data_final)
+
+ces_data_final<-ces_data_final %>% 
+  mutate(incomefm = case_when(income_family >= 0  & income_family < 25000 ~ 'Less than $25,000',
+                              income_family >= 25000  & income_family < 50000 ~ '$25,000 to $49,999',
+                              income_family >= 50000  & income_family < 75000 ~ '$50,000 to $74,999',
+                              income_family >= 75000  & income_family < 100000 ~ '$75,000 to $99,999',
+                              income_family >= 100000  & income_family < 125000 ~ '$100,000 to $ 124,999',
+                              income_family >= 125000 ~ '$125,000 and more',
+                              income_family %in% c(-9 ,-8 ,-7) ~ 'Other'
+                         )) 
+
+detach(ces_data_final)
+
+attach(gss_data_final)
+
+gss_data_final<-gss_data_final %>% 
+  mutate(incomefm = case_when(income_family == 1 ~ 'Less than $25,000',
+                              income_family == 2 ~ '$25,000 to $49,999',
+                              income_family == 3 ~ '$50,000 to $74,999',
+                              income_family == 4 ~ '$75,000 to $99,999',
+                              income_family == 5 ~ '$100,000 to $ 124,999',
+                              income_family == 6 ~ '$125,000 and more',
+                              income_family %in% c(96 ,97 ,98 ,99) ~ 'Other'
+                         )) 
+
+detach(gss_data_final)
+```
+
+```{r}
+# match marital status in ces data with marital status in gss data
+attach(ces_data_final)
+
+ces_data_final<-ces_data_final %>% 
+  mutate(marstat = case_when(marital_status == 1 ~ 'Married',
+                             marital_status == 2 ~ 'Living with a partner',
+                             marital_status == 3 ~ 'Divorced',
+                             marital_status == 4 ~ 'Separated',
+                             marital_status == 5 ~ 'Widowed',
+                             marital_status == 6 ~ 'Never married',
+                             marital_status %in% c(-9 ,-8 ,-7) ~ 'Other'))
+
+detach(ces_data_final)
+
+attach(gss_data_final)
+
+gss_data_final<-gss_data_final %>% 
+  mutate(marstat = case_when(marital_status == 1 ~ 'Married',
+                             marital_status == 2 ~ 'Living with a partner',
+                             marital_status == 3 ~ 'Widowed',
+                             marital_status == 4 ~ 'Separated',
+                             marital_status == 5 ~ 'Divorced',
+                             marital_status == 6 ~ 'Never married',
+                             marital_status %in% c(96 ,97 ,98 ,99) ~ 'Other'))
+
+detach(gss_data_final)
+```
+
+```{r}
+# match family size in ces data with family size in gss data
+attach(ces_data_final)
+
+ces_data_final<-ces_data_final %>% 
+  mutate(family_size = 
+           ifelse(hh_size %in% c(-7,-8,-9), 0, hh_size)) 
+
+detach(ces_data_final)
+
+attach(gss_data_final)
+
+gss_data_final<-gss_data_final %>% 
+  mutate(family_size = 
+           ifelse(hh_size %in% c(96,97,98,99),0, hh_size)) 
+
+detach(gss_data_final)
+```
+
+```{r}
+attach(ces_data_final)
+
+ces_data_final<-
+  ces_data_final %>%
+  mutate(vote_Liberal = 
+           ifelse(vote_party==1, 1, 0)) # 1-Liberal ,0-Conservatives
+
+detach(ces_data_final)
+```
+# Methodology
+## Data
+There are two datasets used in this project. The survey data is the ‘2019 Canadian Election Study - Phone Survey’ from the Harvard Dataverse while the census data is the ‘General Social Survey (GSS), Cycle 31, 2017: family’ from the University of Toronto Library. The phone survey is used as the survey data instead of online survey as the number of online survey’s responses is so big that it is even close to the number of responses of the GSS dataset (which is used as the census data). The population of this dataset is all Canadian citizens that live in the ten provinces who are older than 18 years old. The key of this dataset is that its frame is a dual sample frame that takes both wireless and landline phones into account. The sample of this dataset is the 4021 responses of Canadian citizens. These 4021 responses were collected by the CATI (short for Computer Assisted Telephone Interviewing). The sample selection process consisted of two stages. Choosing the number to dial was the first stage. 66% of these samples were collected by calling randomly generated wireless numbers while the remaining 34% were collected by calling landline numbers offered by a sample provider named ASDE. After the first stage, whether the person who took the call were eligible for voting would firstly be checked by confirming the age and citizenship. If there were multiple eligible people were available (in the case of landline phone), the person that had the next birthday became the respondent of the survey and this process was known as the birthday selection method. For non-response numbers, there would be follow-up calls scheduled after three days. The major weakness of this dataset is that the number of response collected is too small compared to Canada true population. (Stephenson, Laura B; Harell, Allison; Rubenson, Daniel; Loewen, Peter John, 2020, "2019 Canadian Election Study - Phone Survey Technical Report.pdf") 
+
+The population of the GSS dataset is all non-institutionalised people that live in the ten provinces of  Canada and are no younger than 15 years old. The frame of the dataset is a sample frame invented in 2013 that combines phone numbers with Statistics Canada’s Address Register. In this sample frame, the Address Register is used to assemble phone number with same address. The first step of the sampling process was to perform a stratification by dividing the ten provinces of Canada into 27 different strata geographically. In each strata, the interviewers conducted a simple random sampling process without replacement and used the CATI technique introduced above to perform the survey. At the beginning of the survey, the interviewees had to confirm eligibility of survey. According to record, 91.8% of calls were answered by eligible household and the approximate response rate of the survey was 52.4%. If the households refused to take the survey or did not answer, there would be two future calls to explain the importance of the survey and to convince them to complete the survey. For the non-response numbers or bad timing of calling, at least three calls would be made to try to reach them. By this sample collection process, 20602 responses were recorded for future analysis and these are the sample of this dataset. The key feature of this dataset is the frame that combines Address Register with phone numbers to ensure the maximum coverage rate of households and the stratification process of sampling selection. The main weakness is all samples are under the influence of sampling and non-sampling error. (‘General Social Survey (GSS), Cycle 31, 2017: family’)
+
+After downloading the raw data of CES dataset and GSS dataset, I perform data cleaning processes on them to derive clean datasets with relative variables for my project. As the multilevel regression with poststratification technique requires two datasets to have variables that match to each other, I firstly select gender, living region, highest education level, religion, household income, household size, marital status and voting intention from CES dataset. I did researches online and found out that the winner of election are always Liberal party or Conservatives Party. Therefore, all responses with voting intention of other parties were excluded. Then, all responses with NAs are also excluded from the analysis. I put every specific age of response in CES dataset into different age groups of 10 years and match the age group variable in GSS dataset with it. Similar matching were done on gender, living region (I grouped provinces in region as the scales of two dataset are different), highest education level, family income, marital status and family size. The age group, living region and voting for Liberal party are the three variables I constructed. The age group and living region are constructed because the scales of these two variables in CES and GSS datasets are different (e.g. age in CES response is specific number while age in GSS is represented by age group). The voting for Liberal variable is constructed because the prediction of Liberal party supporting rate needs this variable. Six responses of CES dataset and GSS dataset are shown in table 1(CES) and table 2(GSS) below. The columns are different categories of information of respondent and the type of information could be understood by the names of columns. Not all variables would be used and detailed justification of variable selection process would be provided in the model section.
+$$\\Table 1 $$ 
+```{r}
+# mutate vote_party in ces data
+attach(ces_data_final)
+
+ces_data_final<-ces_data_final %>% 
+  mutate(vote_party_ch = case_when(vote_party == 1 ~ 'Liberal',
+                                   vote_party == 2 ~ 'Conservatives'
+                                   )) 
+
+detach(ces_data_final)
+
+head(ces_data_noNA)
+```
+$$\\Table 2 $$ 
+```{r}
+
+head(gss_data_noNA)
+```
+## Model
+The topic of this project is how the results of 2019 Canadian Federal Election would be different if every voted. I approached this topic by comparing the supporting rate of Liberal Party with that of Conservatives party because the majority of seats were often won by these two parties in recent decades. The technique of this project is Multilevel Regression with Poststratification. The mechanism behind this technique could be summarised into three steps. Firstly, a model would be created for the survey data in order to fit a correlation between the response variable (vote for Liberal Party or not in this project) and various explanatory variables (e.g. age group, sex, region…). Secondly, the census data is partitioned into many cells based on different combinations of factors I choose as explanatory variables. Lastly, each cell would aggregate towards a population estimate (also known as the poststratification estimate) according to its estimate of model in survey data based on explanatory variables and its relative proportion in the population. The mathematic notation of poststratification estimate is 
+$$ \hat{y_{ps}} = \frac{\sum{N_{j}\hat{y}_{j}}}{{\sum{N_{j}}}}$$
+$$\\equation 1$$ 
+$\hat{y_{ps}}$ is the desirable poststratification estimate (range: 0 - 1), $N_{j}$ is the size of $j$th cell (range: 0 - infinity) in the population and $\hat{y_{j}}$ is the estimate of $y$ in the $j$th cell (range: 0 - 1). Applying to this project, $\hat{y_{ps}}$ is the prediction of GSS dataset’s Liberal Party support rate, $N_{j}$ is the size of $j$th cell in the GSS dataset and the 
+$\hat{y_{j}}$ is the estimate of Liberal Party support rate based on CES dataset. Different cells refer to different groups of people within the two datasets and people in the same group share the same explanatory variables (e.g. age group, sex, region…). There are two reasons of applying this technique. The first one is that this technique could aggregate samples to a population estimate based on samples’ weights and this significantly reduces the influence of small or unrepresentative samples. The second reason is that it is extremely costly and time-consuming to perform a census on national level and the poststratification technique is far more efficient and convenient to perform without compromising too much accuracy. 
+
+The model used in this project is Bayesian logistic model. A logistic model is used because the response variable is whether the individual is voting for Liberal Party or not, which is binary. Therefore, linear model would not be suitable because of the boundary of linear model approximation exceeds the range of 0 to 1. The mathematic notation of Bayesian Logistic Regression is $$ log (p/(1-p))=\beta_0+\beta_1  x_{i1}+\beta_2  x_{i2}+\beta_3  x_{i3}+\beta_k  x_{ik}$$
+$$\\equation 2$$ . $\beta_0$, $\beta_1$ to $\beta_k$ are the variables of interest. $\beta_0$ (range: 0 - infinity) represents the intercept of model while $beta_i$ (range of $beta_i$: 0 - infinity) (range of $i$: 1- k) represent the coefficient associated with the categorical variable $x_i$ and they are essentially the change in log odds corresponds to every one unit change of $x_i$. $p_i$ in this formula represents the probability of an individual voting for Liberal Party (range: 0 - 1), $x_ik$ represents a specific choice of a explanatory variable (e.g. female, living in Ontario, highest level of education is University…)
+According to my research, the prior of this Bayesian logistic model is defined to be $$\beta_i \sim N(0 , 10)$$
+$$\\equation 3$$. Although it is a non-informative prior, the sample size of CES dataset is quite big that its effect on the model could be neglected.  (Bayesian Inference for Logistic Regression Parameters.pdf) After finishing the prediction of using Bayesian logistic model with poststratification, I also added a layer of age to the bayesian model to investigate how layer would affect the result of prediction and detailed analysis would be performed on the discussion section.
+
+After deciding the model, I perform variable analysis in order to determine what are the explanatory variables that have significant influences on voting decision. I choose sex, age group, region, education level, family income, marital status and family size as explanatory variables and group the voting results based on these variables. After the analysis, I choose sex, region and marital status as the explanatory variables of Bayesian logistic model. Detailed justification would be provided in the discussion section. All variables in the model are set to be categorical in order to better fit the model. Variables like age in CES dataset are mutated into age group to match the corresponding variable in GSS dataset. I use R Studio to perform the modelling and variable analysing process.
+
+```{r}
+library(lme4)
+library(brms)
+library(tidyverse)
+library(caret)
+library(ROCR)
+```
+# Results
+```{r}
+
+# Liberal support prop  0.485
+raw_Liberal_prop = sum(ces_data_final$vote_party[ces_data_final$vote_party == 1]) / nrow(ces_data_final)
+
+# Conservatives support prop  0.515
+raw_Conservatives_prop = 1 - raw_Liberal_prop
+
+name_party <- c('Liberal' ,'Conservatives')
+prop_party <- c(raw_Liberal_prop ,raw_Conservatives_prop)
+
+library(ggplot2)
+
+ggplot(ces_data_final, aes(x=vote_party_ch)) + 
+  geom_bar(stat="count" ,width = 0.25 ,fill="lightblue") + 
+  labs(title="Figure1: The votes of Two Parties in Survey Data", subtitle= "Liberal 48.5%  Conservatives 51.5%" ,x="Party", y="Count") 
+```
+
+Figure 1 is a histogram of support rate of two parties in the survey data. It is plotted by simply counting the votes of Liberal Party and Conservatives Party in the GSS dataset. From the histogram, 48.5% of 1400 people that voted for these two parties supported Liberal Party while the remaining 51.5% people supported Conservatives Party.
+
+The histograms from Figure 2 to Figure 7 are used for variable selection process and therefore I would not relay too detailedly about their results. And the methodology of collecting data for Figure 2 to Figure 8 is also counting the votes for two parties based on different factors.
+
+```{r}
+# Variables Analysis
+# sex 
+gr1_data <- 
+  ces_data_final %>%
+  count(sex, vote_party_ch) %>%
+  group_by(sex, vote_party_ch) 
+
+ggplot(gr1_data, aes(x=vote_party_ch,y=n, fill=sex)) +geom_bar(stat="identity", width=0.5, position=position_dodge(0.6))+geom_text(aes(label=n),position=position_dodge(0.6), vjust=-0.1)+labs(title="Figure2: The Votes of Two Parties Based on Sex", x="Party", y= "Count")
+```
+Figure 2 is a histogram that counts the votes of two parties based on interviewee’s gender. 312 out of 543 (57.5%) female voted for Liberal Party and 367 out of 857 (42.8%) male voted for Liberal Party.
+
+```{r}
+# age
+gr2_data <- 
+  ces_data_final %>%
+  count(agegroup, vote_party_ch) %>%
+  group_by(agegroup, vote_party_ch) 
+
+ggplot(gr2_data, aes(x=vote_party_ch,y=n, fill=agegroup)) +geom_bar(stat="identity", width=0.5, position=position_dodge(0.6))+geom_text(aes(label=n),position=position_dodge(0.6), vjust=-0.1)+labs(title="Figure3: The Votes of Two Parties Based on Age Group", x="Party", y= "Count")+scale_fill_discrete(name="age")
+```
+Figure 3 is a histogram that counts the votes of two parties based on interviewee’s age group. 136 out of 299 (45.5%) people in the age group of 55 to 64 voted for Liberal Party.
+
+```{r}
+# region
+gr3_data <- 
+  ces_data_final %>%
+  count(region, vote_party_ch) %>%
+  group_by(region, vote_party_ch) 
+
+ggplot(gr3_data, aes(x=vote_party_ch,y=n, fill=region)) +geom_bar(stat="identity", width=0.5, position=position_dodge(0.6))+geom_text(aes(label=n),position=position_dodge(0.6), vjust=-0.1)+labs(title="Figure4: The Votes of Two Parties Based on Region", x="Party", y= "Count")
+```
+Figure 4 is a histogram that counts the votes of two parties based on interviewee’s living region. 156 out of 269 (58.0%) people in Atlantic Region, 117 out of 251 (46.6%) people in British Columbia, 185 out of 317 (58.4%) people in Ontario, 85 out of 363 (23.4%) people in Prairie Region and 136 out of 200 (68.0%) people in Quebec voted for Liberal Party.
+
+```{r}
+# education
+gr4_data <- 
+  ces_data_final %>%
+  count(edu, vote_party_ch) %>%
+  group_by(edu, vote_party_ch) 
+
+ggplot(gr4_data, aes(x=vote_party_ch,y=n, fill=edu)) +geom_bar(stat="identity", width=0.5, position=position_dodge(0.6))+geom_text(aes(label=n),position=position_dodge(0.6), vjust=-0.1)+labs(title="Figure5: The Votes of Two Parties Based on Highest Education Level", x="Party", y= "Count")+scale_fill_discrete(name="education level")
+```
+Figure 5 is a histogram that counts the votes of two parties based on interviewee’s highest education level. 152 out of 231 (65.8%) people with above bachelors degree, 226 out of 401 (56.4%) people with bachelors degree, 203 out of 503 (40.4%) people with college degree, 88 out of 245 (35.9%) people with high school degree, voted for Conservatives Party.
+
+```{r}
+# income_family
+gr5_data <- 
+  ces_data_final %>%
+  count(incomefm, vote_party_ch) %>%
+  group_by(incomefm, vote_party_ch) 
+
+ggplot(gr5_data, aes(x=vote_party_ch,y=n, fill=incomefm)) +geom_bar(stat="identity", width=0.5, position=position_dodge(0.6))+geom_text(aes(label=n),position=position_dodge(0.6), vjust=-0.1)+labs(title="Figure6: The Votes of Two Parties Based on Family Income", x="Party", y= "Count")+scale_fill_discrete(name="family income")
+```
+Figure 6 is a histogram that counts the votes of two parties based on interviewee’s family income. 105 out of 211 (49.8%) people with the income of $25000 to $49999 voted for Liberal Party.
+
+```{r}
+# marital status
+gr6_data <- 
+  ces_data_final %>%
+  count(marstat, vote_party_ch) %>%
+  group_by(marstat, vote_party_ch) 
+
+ggplot(gr6_data, aes(x=vote_party_ch,y=n, fill=marstat)) +geom_bar(stat="identity", width=0.5, position=position_dodge(0.6))+geom_text(aes(label=n),position=position_dodge(0.6), vjust=-0.1)+labs(title="Figure7: The Votes of Two Parties Based on Marital Status", x="Party", y= "Count")+scale_fill_discrete(name="marital status")
+```
+Figure 7 is a histogram that counts the votes of two parties based on interviewee’s marital status. 356 out of 814 (43.7%) people who are married, 123 out of 201 (61.2%) people who are never married, 29 out of 70 (41.4%) people who are widowed, voted for Liberal Party.
+
+```{r}
+# family size
+gr7_data <- 
+  ces_data_final %>%
+  count(family_size, vote_party_ch) %>%
+  group_by(family_size, vote_party_ch) 
+
+ggplot(gr7_data, aes(x=vote_party_ch,y=n, fill=factor(family_size))) +geom_bar(stat="identity", width=0.5, position=position_dodge(0.6))+geom_text(aes(label=n),position=position_dodge(0.6), vjust=-0.1)+labs(title="Figure8: The Votes of Two Parties Based on Family Size", x="Party", y= "Count")+scale_fill_discrete(name="family size")
+```
+Figure 8 is a histogram that counts the votes of two parties based on interviewee’s family size. 146 out of 259 (56.4%) people with family size of 1, 288 out of 599 (48.1%) people with family size of 2, 86 out of 180 (47.8%) people with family size of 4, voted for Liberal Party.
+
+```{r}
+# Variables for Model and Stratification
+# Splitting cells by sex,region,marstat,agegroup
+gss_data_org <- gss_data_final
+
+gss_data_final <- 
+  gss_data_final %>%
+  count(sex, region, marstat,agegroup) %>%
+  group_by(sex, region, marstat,agegroup) 
+
+col_ces <- c("agegroup","sex","region","marstat")
+col_gss <- c("agegroup","sex","region","marstat")
+
+ces_data_final[col_ces] <- lapply(ces_data_final[col_ces], as.factor) 
+gss_data_final[col_gss] <- lapply(gss_data_final[col_gss], as.factor) 
+```
+I choose sex, living region and marital status as the explanatory variables for the Bayesian Logistic Model (detailed justification will be provided in discussion section). Therefore, the mathematical notation of this model is $$ 
+\begin{aligned}
+log (p/(1-p)) = \beta_0+\beta_1  x_{Sexmale} 
++\beta_2  x_{BritishColumbia}+\\
++\beta_3  x_{Ontario}
++\beta_4  x_{PrairieRegion}+\\
++\beta_5  x_{Quebec}
++\beta_6  x_{livingwithpartner}
++\beta_7  x_{Married}+\\
++\beta_8  x_{Nevermarried}
++\beta_9  x_{Other}
++\beta_a  x_{Seperated}
++\beta_b  x_{Widowed}
+\end{aligned}
+$$ $$\\equation 4$$ . The variables of interest in $equation 4$ are the intercept $\beta_0$, the coefficient corresponding to sex is male $\beta_1$, the coefficient corresponding to living area is British Columbia $\beta_2$, the coefficient corresponding to living area is Ontario $\beta_3$, the coefficient corresponding to living area is Prairie Region $\beta_4$, the coefficient corresponding to living area is Quebec $\beta_5$, the coefficient corresponding to marital status is living with partner $\beta_6$, the coefficient corresponding to marital status is married $\beta_7$, the coefficient corresponding to marital status is never married $\beta_8$, the coefficient corresponding to marital status is other $\beta_9$, the coefficient corresponding to marital status is separated $\beta_a$, the coefficient corresponding to marital status is widowed $\beta_b$ (use $a$ and $b$ as corner marks because two-digit number would cause format problem). $\beta_1$ to $\beta_b$ represents how logic odds would vary if one unit of $x_i$ (one explanatory variable) changes. All other variables take values from the CES dataset. The value of $p$ is the probability prediction of voting for Liberal Parties with certain combination of explanatory variables. The value of $x_i$ would take 1 if the condition of $x_i$ is true and 0 otherwise. The brms package in R invokes the Markov Chain Monte Carlo and Gibbs Sampling to generate a Bayesian Logistic Model from the CES dataset. The prediction value from $\beta_0$ to $\beta_b$ (intercept and coefficients associated with different explanatory variables) are shown in the table 3 below.$$\\$$ $$\\Table 3$$
+
+```{r}
+# Imitate the code of Getting started with MRP on Quercus (Rohan Alexander)
+# Models
+library(brms)
+library(nlme)
+library(tidyverse)
+
+library(broom)
+library(brms) 
+library(here)
+library(tidybayes) 
+# Bayesian Logistic Model 1 
+model1 <- brm(vote_Liberal ~ sex + region + marstat, 
+              data = ces_data_final,
+              family = bernoulli(),
+              file = "outputs/model/brms_model1" )
+
+model <- read_rds("outputs/model/brms_model1.rds") 
+summary(model1)
+```
+The columns of Table 3 include the estimate of coefficient related to different explanatory variables (i.e. $\beta_i$), estimated error of the estimate, lower and upper bound of the 95% confidence level and so on. It is noticeable that the deviance and variance of this estimation is relatively big. Detailed analysis and next steps will be discussed in the Discussion section.
+
+According to the result in Table 3, the Bayesian Logistic Model is defined as equation 5 below:$$
+\begin{aligned}
+log (pi/(1-pi)) = 0.89-0.62  x_{Sexmale} 
+-0.41  x_{BritishColumbia}
++0.07  x_{Ontario}
+-1.51  x_{PrairieRegion}+\\
++0.38  x_{Quebec}
++0.01  x_{livingwithpartner}
+-0.36  x_{Married}+\\
++0.32  x_{Nevermarried}
+-0.73  x_{Other}
++0.22  x_{Seperated}
+-0.77  x_{Widowed}
+\end{aligned}$$
+$$\\equation 5$$ 
+After building the model, I partition GSS dataset with respect to age group, the count of people within certain age group (i.e. $N_j$) is shown in the table 4 below:
+$$\\Table 4$$
+```{r}
+# Imitate the code of Getting started with MRP on Quercus (Rohan Alexander)
+# Calculate the weight
+wt <- gss_data_org %>% 
+  count(agegroup)
+wt
+```
+After partitioning the GSS dataset by age group, the Bayesian Logistic Model is applied to each age group cell to generate the predicted probability of supporting Liberal Party for each cell (i.e. $\hat{y_j}$) and the result is shown in the table 5 below: 
+$$\\Table 5$$
+
+```{r}
+# Imitate the code of Getting started with MRP on Quercus (Rohan Alexander)
+# calculate the count of different age group and calculate the estimate from Bayesian Logistic Model for each age group
+post_stratified_estimates <-
+  model %>%
+  tidybayes::add_predicted_draws(newdata = gss_data_final) %>% rename(alp_predict = .prediction) %>%
+  mutate(alp_predict_prop = alp_predict*n) %>% group_by(agegroup, .draw) %>%
+  summarise(alp_predict = sum(alp_predict_prop)/sum(n)) %>%
+  group_by(agegroup) %>%
+  summarise(mean = mean(alp_predict),
+  lower = quantile(alp_predict, 0.025), upper = quantile(alp_predict, 0.975))
+
+post_stratified_estimates
+```
+The columns of Table 5 include the mean value, lower bound and upper bound of probability prediction of each each cell. The average predicted probability of voting Liberal Party is around 0.55 for each cell. However, there exist non-neglectable deviation as the lower bound and upper bound of one cell could be 0.531 (15 to 24 age group), almost equals to the mean value of estimation.
+From Table 4 and Table 5, $\hat{y_j}$ and $N_j$ for each age group are derived and the $\hat{y_{ps}}$ could be calculated by equation 1 below:$$ \hat{y_{ps}} = \frac{\sum{N_{j}\hat{y}_{j}}}{{\sum{N_{j}}}}$$
+$$\\equation 1$$
+The numerical result is 0.5461027 shown below:
+```{r}
+# Imitate the code of Getting started with MRP on Quercus (Rohan Alexander)
+# Calculate the poststratification estimate
+prop <-
+  model %>%
+  tidybayes::add_predicted_draws(newdata = gss_data_final) %>% rename(alp_predict = .prediction) %>%
+  mutate(alp_predict_prop = alp_predict*n) %>% group_by(agegroup) %>%
+  summarise(alp_predict = sum(alp_predict_prop)/sum(n)) 
+
+sum(prop$alp_predict*wt$n)/sum(wt$n)
+```
+This result represents that the estimated voting rate of Liberal Party is approximately 54.6% by using the Bayesian Logistic Model with poststratification technique.
+After the first time of using MRP technique, I add another layer of age group to the model in order to find different intercepts for different age groups. The estimation of $\beta_i$ for each age group is shown in the Table 6 below:
+$$\\Table 6$$
+```{r}
+# Imitate the code of Getting started with MRP on Quercus (Rohan Alexander)
+# Bayesian Logistic Model 2 with 1 layer of age group 
+model2 <- brm(vote_Liberal ~ sex + region + marstat + (1|agegroup), 
+              data = ces_data_final,
+              family = bernoulli(),
+              file = "outputs/model/brms_model2" )
+
+model <- read_rds("outputs/model/brms_model2.rds") 
+summary(model)
+```
+Similarly, the model is applied to each age group to find the $\hat{y_j}$ as the partition of GSS dataset stays the same. The result of $\hat{y_j}$ is shown in the Table 7 below:
+$$\\Table 7$$
+```{r}
+# Imitate the code of Getting started with MRP on Quercus (Rohan Alexander)
+# Calculate the count of different age group and calculate the estimate from Bayesian Logistic Model for each age group
+post_stratified_estimates <-
+  model %>%
+  tidybayes::add_predicted_draws(newdata = gss_data_final) %>% rename(alp_predict = .prediction) %>%
+  mutate(alp_predict_prop = alp_predict*n) %>% group_by(agegroup, .draw) %>%
+  summarise(alp_predict = sum(alp_predict_prop)/sum(n)) %>%
+  group_by(agegroup) %>%
+  summarise(mean = mean(alp_predict),
+  lower = quantile(alp_predict, 0.025), upper = quantile(alp_predict, 0.975))
+
+
+post_stratified_estimates
+```
+Therefore, the estimation of voting for Liberal Party (i.e. $\hat{y_{ps}}$), could be again calculated by equation 1.
+The numerical result is 0.5452019 shown below:
+```{r}
+# Imitate the code of Getting started with MRP on Quercus (Rohan Alexander)
+# Calculate the poststratification estimate
+prop <-
+  model %>%
+  tidybayes::add_predicted_draws(newdata = gss_data_final) %>% rename(alp_predict = .prediction) %>%
+  mutate(alp_predict_prop = alp_predict*n) %>% group_by(agegroup) %>%
+  summarise(alp_predict = sum(alp_predict_prop)/sum(n)) 
+
+sum(prop$alp_predict*wt$n)/sum(wt$n)
+```
+This result represents that the estimated voting rate of Liberal Party after adding a layer with respect to age group is approximately 54.6% by using the Bayesian Logistic Model with poststratification technique.
+After completing two times of using MRPs to estimate the voting rate of Liberal Party, a graph that compares the Liberal Party voting rate is drawn in Figure 9 below:
+$$\\Figure 9$$
+Figure9: Comparison of Liberal Party Voting Rate between MRP Estimation and Raw Data
+```{r}
+# Imitate the code of Getting started with MRP on Quercus (Rohan Alexander)
+# Plot voting rate for each age group (MRP v.s. Raw Data)
+post_stratified_estimates %>%
+  ggplot(aes(y = mean, x = forcats::fct_inorder(agegroup), color = "MRP estimate")) + geom_point() +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0) +
+  ylab("Liberal Party Voting Rate") +
+  xlab("Age") +
+  geom_point(data = ces_data_final %>%
+  group_by(agegroup, vote_Liberal) %>% summarise(n = n()) %>% group_by(agegroup) %>%
+  mutate(prop = n/sum(n)) %>% filter(vote_Liberal==1),
+  aes(agegroup, prop, color = "Raw data")) + theme_minimal() +
+  scale_color_brewer(palette = "Set1") + theme(legend.position = "bottom") + theme(legend.title =     element_blank())
+```
+From Figure 9, the estimation of Liberal Party Voting Rate from MRP technique for every age group is greater than the estimation of Liberal Party Voting Rate from raw data except the age group of 75 years and over. The biggest difference occurs for the age group of 15 to 24, which is around 0.16 (0.65 for MRP estimate and 0.49 for Raw data).The only case that Liberal Party Voting Rate of raw data exceeds that of MRP estimate occurs at age group of 75 years and over (Raw Data: 0.52 v.s. MRP estimate: 0.50).
+
+# Discussion
+## Summary & Conclusion
+Federal Election has always been a controversial politic event for every constitutional monarchy contrary. Canadian Federal Election firstly caught my interest because there exists a heated debate about the justice and accuracy of United States Presidential Election recently. As I am an international student in Canada, I did some researches online about Canadian Federal Election and found out that it was always the case only around 70% of eligible voters chose to vote for the Federal Election in the past few decades. In this way, the idea of using statistical technique to predict the 2019 Canadian Federal Election result formed. In general, the goal of this project is to predict how voting rate of Liberal Party (versus Conservatives Party) of 2019 Canadian Federal Election would be different if everyone voted by using Bayesian Logistic Model with Poststratification (as the winner often comes from these two parties in recent years). Essentially, this technique requires a survey dataset to train the model and a target dataset to do the estimation. In this project, survey dataset is the 2019 CES dataset and the target dataset is the 2017 GSS dataset. After data cleaning process (mainly eliminates NAs and roughly selects interested variables), I prepare sex, age group, living region, highest education level, family income, marital status and family size as interested variables. Then, I perform a variable selection process by plotting the count of votes for two parties based on the CES dataset and comparing how different explanatory variables would affect the voting rate of Liberal Party. As shown in the Result section, Liberal Party voting rate varies a lot in terms of sex (57.5% of Female voted for Liberal Party), age group (45.5% Liberal Party voting rate from the age group of 55 to 64), living region (23.4% people in Prairie Region and 68.0% people in Quebec voted for Liberal Party), marital status (61.2% people who never married and 41.4% people who are widowed voted for Liberal Party). There are also real-life reasons behind the variation of Liberal voting rate with respect to these variables. Liberal Party encourages female to run for member of parliaments for a long time and the number of female successfully elected as MPs increased from 81 to 91 in 2015 Election and from 91 to 91 in 2019 Election. (Canada set a new record for most elected female MPs, but advocates expected more) The population of Prairie Region considered Liberal Party to be arrogant and elitist. (Ethan Cabel, et al. Why the Liberal Party of Canada is dead on the Prairies)The Liberal Party is favoured by people who never married partly because it has an open policy on same-sex marriage. The distribution of votes in terms of education level is also uneven between these two parties. But I decided not to use it because the reason behind it might be politically sensitive. The other prepared variables are excluded in the following analysis as the variations of count based on them are not substantial. 
+After finalising variables, I build a Bayesian Logistic Model by R studio to estimate the intercept $\beta_0$ and coefficients $\beta_i$ based on these variable values. From the Table 3 in Result section, people who live in Ontario (coefficient 0.07), live in Quebec (0.38), never married (0.32) or separated with partners (0.22) tend to vote for Liberal Party while people who are male (-0.62), live in British Columbia (-0.41), live in Prairie Region (-1.51), who are married (-0.36), who are widowed (-0.77) have a preference to vote for Conservative Party. It is noticeable that the estimated error is fine (around 0.2) for ever variable value except for the others in marital status (0.87) and this means that the variation of votes caused by having marital status of others could be inaccurate. In This way, the Bayesian Logistic Model is formed to be $$
+\begin{aligned}
+log (pi/(1-pi)) = 0.89-0.62  x_{Sexmale} 
+-0.41  x_{BritishColumbia}
++0.07  x_{Ontario}
+-1.51  x_{PrairieRegion}+\\
++0.38  x_{Quebec}
++0.01  x_{livingwithpartner}
+-0.36  x_{Married}+\\
++0.32  x_{Nevermarried}
+-0.73  x_{Other}
++0.22  x_{Seperated}
+-0.77  x_{Widowed}
+\end{aligned}$$
+$$\\equation 5$$ 
+Afterwards, the target dataset (GSS dataset) is partitioned based on age group and the model is applied to each cell to get an estimate. The estimation of Liberal Party voting rate for each age group are generated by the Bayesian Logistic Model and are shown in the Table 5 in the Result section. The mean of estimated voting rate is maximised at 0.631 (age group of 15 to 24) and is minimised at 0.484 (age group of 75 years and over). I notice that the difference between lower and upper bound of the estimate could be quite high for some age groups (e.g. 0.53 for age group of 15 to 24), therefore I would later add a layer of age to the Bayesian Logistic Model to change the intercept and investigate whether adding layers could increase accuracy. The poststratification estimate of Liberal voting rate could be calculated by applying equation 1. And the poststratification  result is 0.54547, indicates that around 54.5% people would vote for Liberal Party if everyone voted in the 2019 Canadian Federal Election. After this, I add a layer of age group to the model and produce the coefficients and intercept of Bayesian Logistic Model, estimated Liberal Party voting rate of model and poststratification estimate in a similar way (results shown in Table 6 and Table 7 in the Result Section). From Table 6, adding layer provides estimated error of 0.1, which is relatively big as the estimated intercept at group level is only 0.12. And it is not evident that adding this layer decreases the estimated error for explanatory variables’ coefficients as the estimated error of people never married even increases from 0.27 to 0.28 although other variables’ estimated error dropped by 0.01. Also, it is not conclusive that the variation of estimated Liberal Party voting rate by Bayesian Logistic Model of each age group decreases because of the layer from the result of Table 7. The $\hat{y_{ps}}$ calculated by the second model is 0.545703, indicating that 54.6% of people would vote for Liberal Party if everyone voted. Finally, I plotted and compared the Liberal Party voting rate of different age groups from MRP estimation and Raw data (Figure 9 in Result section). 
+
+I could make a conclusion from Figure 9 that the voting rate of MRP estimation exceeds that of Raw data by approximately 0.75 for all age groups except 75 years and over (voting rate of Raw data exceeds that of MRP estimation by 0.2). The overall poststratification estimation $\hat{y_{ps}}$ of voting Liberal Party is 54.5% and 54.6% (with a layer of age group). According to my research, Liberal Party won 6018728 votes and Conservatives Party won 6239227 votes in 2019 Canadian Federal Election, which means that the real voting rate of Liberal Party is around 49.1%. Thus, if the people that not voted for Election (around 30% of eligible voters) chose to vote, the voting rate of Liberal Party would increase by around 5.5%. (2019_Canadian_federal_election)
+
+## Weakness & Next Step
+The Bayesian Model with Poststratification technique involves multiple steps and therefore there are different bias that come from different resources. Firstly, the datasets of the project could bring bias. The CES dataset is considered as survey data and it was accessed by Harvard Dataverse online. The main weakness of CES phone survey dataset is that the number of responses is too small. I choose the phone survey because the number of response in web survey is too close to the target dataset. After cleaning the CES phone survey dataset, there are only around 1400 responses left. This could cause selection bias as samples collected could not represent all categories of people in Canada. The GSS dataset is accessed from University of Toronto Library. It also has selection bias as the number of responses is also relatively small to represent the true population. These two datasets also have non-response bias and voluntary bias as the group of people who choose to complete survey or ignore survey might have similar characteristics.
+Secondly, the variable selection process also causes uncertainty. I choose four variables to build model while there are countless characteristics that would have influence on people’s preferences of voting. Thus, the uncertainty and variance of the model is non-neglectable. There are also weakness associated with the MRP technique. MRP technique requires the survey dataset and census dataset to have a high level of match in terms of variables. Thus, it is hard to find suitable dataset and I use 2017 GSS dataset as a compromising choice to represent the true population of Canada on 2020, which could cause inaccuracy. Furthermore, there is also bias associated with the Bayesian Logistic Model. I choose a non-informative prior for the model and therefore could lead to big uncertainty. 
+
+In the light of analysis above, the project has many bias and uncertainty and therefore could have many next steps. Firstly and most Importantly, I could find survey dataset and census dataset with more responses. Even more, I could design my own surveys as the question in the survey could be closely related to my desirable variables and the responses are more up to date. In this way, I could calculate the new prediction of Liberal Party voting rate based on new dataset and testify my hypothesis that the vote rate of Liberal Party would increase when more people chooses to vote. Another meaningful step is to find a better prior distribution for the Bayesian Logistic Model. This could be done by doing researches on previous Liberal Party voting rate. Last but not least, more variables should be used during the modelling and poststratification process.
+
+# Reference
+Code: 
+Alexander, Rohan. “Getting-Started-with-Mrp.” Quercus STA304 Week5 Module, University of Toronto, q.utoronto.ca/courses/184060/files/9612465?module_item_id=1890034. 
+\\Alexander, Rohan, and Sam Caetano. “gss_cleaning.R.” University of Toronto. 
+Data:
+‘General Social Survey (GSS), Cycle 31, 2017: family’ Smith, Tom W., Davern, Michael, Freese, Jeremy, and Morgan, Stephen, General Social Surveys, 1972-2018 [machine-readable data file] /Principal Investigator, Smith, Tom W.; Co-Principal Investigators, Michael Davern, Jeremy Freese, and Stephen Morgan; Sponsored by National Science Foundation. --NORC ed.-- Chicago: NORC, 2018: NORC at the University of Chicago [producer and distributor]. Data accessed from the GSS Data Explorer website at gssdataexplorer.norc.org.
+\\Stephenson, Laura B; Harell, Allison; Rubenson, Daniel; Loewen, Peter John, 2020, “2019 Canadian Election Study - Phone Survey”, https://doi.org/10.7910/DVN/8RHLG1, Harvard Dataverse, V1, UNF:6:eyR28qaoYlHj9qwPWZmmVQ==fileUNF
+Software:
+RStudio Team (2020). RStudio: Integrated Development for R. RStudio, PBC, Boston, MA URL http://www.rstudio.com/.
+Literature:
+“Canada's Political System.” Canada's Political System | Elections Canada's Civic Education, 15 Dec. 2020, electionsanddemocracy.ca/parliament/canadas-political-system. 
+Reports of the Clerk of the Crown in Chancery (1867-1917); reports of the Chief Electoral Officer (1921-2008); Official Voting Results (2011-2019); unpublished summary data prepared by Elections Canada; R. Pomfret, The Economic Development of Canada (1987); H.A. Scarrow, Canada Votes (1962); Contact (1985).
+Stephenson, Laura B; Harell, Allison; Rubenson, Daniel; Loewen, Peter John, 2020, "2019 Canadian Election Study - Phone Survey Technical Report.pdf", 2019 Canadian Election Study - Phone Survey, https://doi.org/10.7910/DVN/8RHLG1/1PBGR3, Harvard Dataverse, V1
+“Bayesian Inference for Logistic Regression Parameters.pdf.” University of Mcgill. 
+David Lao. “Canada Set a New Record for Most Elected Female MPs, but Advocates Expected More.” Global News, Global News, 23 Oct. 2019, globalnews.ca/news/6069742/elections-female-women-parliament-record/. 
+/, Ethan Cabel, et al. “Why the Liberal Party of Canada Is Dead on the Prairies.” Spectator Tribune, 26 Nov. 2012, www.spectatortribune.com/why-the-liberal-party-of-canada-is-dead-on-the-prairies/. 
+2019_Canadian_federal_election, en.wikipedia.org/wiki/2019_Canadian_federal_election. 
